@@ -1,6 +1,6 @@
-module snappydevtools.com/journald-to-cwl
+module github.com/pengubco/journald-to-cwl
 
-go 1.22.4
+go 1.24
 
 require (
 	github.com/aws/aws-sdk-go v1.55.5

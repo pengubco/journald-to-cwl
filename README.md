@@ -1,7 +1,11 @@
 # Journald-to-cwl
 
 `journald-to-cwl` pushes Journald logs from EC2 instance to AWS Cloudwatch Logs (CWL). In production, you'd run it as 
-a systemd service. Here are some features.
+a systemd service. It works as a simple linear Extract -> Transform -> Load process. 
+
+![](./design.svg)
+
+Simplicity in the design leads to its robustness.
 
 1. For simplicity, the CWL and the EC2 instance must be in the same AWS region and they belong to the same AWS account.
 

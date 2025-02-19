@@ -11,7 +11,7 @@ import (
 	"github.com/aws/smithy-go"
 	"go.uber.org/zap"
 
-	"snappydevtools.com/journald-to-cwl/batch"
+	"github.com/pengubco/journald-to-cwl/batch"
 )
 
 // Picked 10 seconds for no reason. 10 seconds is half of the default max backoff in AWS SDK.

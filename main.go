@@ -16,10 +16,10 @@ import (
 	"github.com/coreos/go-systemd/v22/sdjournal"
 	"go.uber.org/zap"
 
-	"snappydevtools.com/journald-to-cwl/batch"
-	"snappydevtools.com/journald-to-cwl/config"
-	"snappydevtools.com/journald-to-cwl/cwl"
-	"snappydevtools.com/journald-to-cwl/journal"
+	"github.com/pengubco/journald-to-cwl/batch"
+	"github.com/pengubco/journald-to-cwl/config"
+	"github.com/pengubco/journald-to-cwl/cwl"
+	"github.com/pengubco/journald-to-cwl/journal"
 )
 
 var (

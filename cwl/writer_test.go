@@ -12,7 +12,7 @@ import (
 	"github.com/aws/aws-sdk-go-v2/service/cloudwatchlogs/types"
 	"github.com/stretchr/testify/assert"
 
-	"snappydevtools.com/journald-to-cwl/batch"
+	"github.com/pengubco/journald-to-cwl/batch"
 )
 
 func TestWriteBatches(t *testing.T) {
