@@ -29,6 +29,12 @@ var (
 )
 
 func main() {
+	// The reason main() calls execute() is that Go does not support both:
+	// 1) Running deferred functions and 2) Setting a non-zero exit code at the same time.
+	os.Exit(execute())
+}
+
+func execute() int {
 	logger, err := zap.NewProduction()
 	if err != nil {
 		log.Fatal(err)
@@ -44,47 +50,68 @@ func main() {
 	defer cancel()
 
 	if err := initializeAWS(); err != nil {
-		zap.S().Panic(err)
+		zap.S().Error(err)
+		return 1
 	}
 
 	c, err := config.InitalizeConfig(instanceID, flag.Args())
 	if err != nil {
-		zap.S().Panic(err)
+		zap.S().Error(err)
+		return 1
 	}
 	zap.S().Infof("Use config, %+v", c)
 
 	cursor, err := NewFilebasedCursor(c.StateFile)
 	if err != nil {
-		zap.S().Panicf("cannot open journal cursor file %s, %w.", c.StateFile, err)
+		zap.S().Errorf("cannot open or create journal cursor file %s, %w.", c.StateFile, err)
+		return 1
 	}
 	defer cursor.Close()
 
 	journalReader, err := initializeJournalReader(cursor)
 	if err != nil {
-		zap.S().Panic(err)
+		zap.S().Error(err)
+		return 1
 	}
 	defer journalReader.Close()
 
-	// There are three go routines. Read -> Batch -> Write
+	// The three background goroutines. Read -> Batch -> Write.
+	// If any of them returns, all of them should return. We achieve this by sharing the same ctx and cancel.
+
 	// Read journald entries.
 	reader := journal.NewReader(journalReader, journal.WithWaitForDataTimeout(time.Second))
-	go reader.Read(ctx)
+	go func() {
+		defer cancel()
+		reader.Read(ctx)
+	}()
 
 	// Batch journald entries to Cloudwatch log events.
 	batcher := batch.NewBatcher(reader.Entries(), batch.NewEntryToEventConverter(instanceID, time.Now))
-	go batcher.Batch(ctx)
+	go func() {
+		defer cancel()
+		batcher.Batch(ctx)
+	}()
 
 	// Write batches to Cloudwatch log.
 	writer := cwl.NewWriter(batcher.Batches(), cwlClient, c.LogGroup, c.LogStream, func(v string) error {
 		return cursor.Set(v)
 	})
-	go writer.Write(ctx)
+	go func() {
+		defer cancel()
+		writer.Write(ctx)
+	}()
 
-	// Grace shutdown
 	ch := make(chan os.Signal, 1)
 	signal.Notify(ch, syscall.SIGINT, syscall.SIGTERM)
-	s := <-ch
-	zap.S().Infof("exit signal %v", s)
+
+	select {
+	case s := <-ch:
+		zap.S().Infof("exit signal %v", s)
+	case <-ctx.Done():
+		return 1
+	}
+
+	return 0
 }
 
 func initializeAWS() error {

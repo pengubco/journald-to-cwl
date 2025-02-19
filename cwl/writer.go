@@ -58,33 +58,37 @@ func NewWriter(
 	}
 }
 
-// Write log events to CWL. It panics if it cannot send events to CWL.
+// Write log events to CWL. It retries forever if the the PutLogEvents is throttled.
 func (w *Writer) Write(ctx context.Context) {
 	for {
 		select {
 		case <-ctx.Done():
 			return
 		case batch := <-w.batches:
-			err := w.writeBatch(ctx, batch.Events)
-			if err == nil {
-				if err := w.saveCursor(batch.Cursor); err != nil {
-					zap.S().Panicf("cannot save cursor, %w", err)
+			// retry forever on throttle. Why forever? Because systemd would restart the program forever anyway.
+			for {
+				err := w.writeBatch(ctx, batch.Events)
+				if err == nil {
+					if err := w.saveCursor(batch.Cursor); err != nil {
+						zap.S().Errorf("cannot save cursor, %w", err)
+						return
+					}
+					break
 				}
-				continue
-			}
-			if err == errThrottled {
-				time.Sleep(timeToWaitOnThrottle)
-			}
-			if err := w.writeBatch(ctx, batch.Events); err != nil {
-				zap.S().Panicf("cannot write events to CWL", err)
-				if err := w.saveCursor(batch.Cursor); err != nil {
-					zap.S().Panicf("cannot save cursor, %w", err)
+				if err == errThrottled {
+					// This line is logged at most every timeToWaitOnThrottle, default to 10 seconds. Logs go to the
+					// journald so we want to make sure journald-to-cwl do not log too frequently.
+					time.Sleep(timeToWaitOnThrottle)
+					continue
 				}
+				// For non retriable error, log and return. We have persisted the cursor, so we won't lose log when
+				// systemd restarts the program.
+				zap.S().Error(err)
+				return // nolint:staticcheck // SA4004: the surrounding loop is unconditionally terminated
 			}
 		}
 	}
 }
-
 func (w *Writer) writeBatch(ctx context.Context, events []types.InputLogEvent) error {
 	putEvents := func(events []types.InputLogEvent) error {
 		request := &cloudwatchlogs.PutLogEventsInput{

@@ -37,7 +37,7 @@ func NewEntryToEventConverter(instanceID string, timestampFn func() time.Time) E
 	}
 }
 
-// priorityMap maps the integer priority level to human readable level. The map is the same as log levels from
+// priorityMap maps the integer priority level to human readable level. The map is the same as levels from
 // `man` journalctl`.
 var priorityMap = map[string]string{
 	"0": "emerg",
@@ -67,7 +67,7 @@ type Record struct {
 	Transport         string       `json:"transport,omitempty"`
 	Priority          string       `json:"priority,omitempty"`
 	Message           string       `json:"message,omitempty"`
-	MesageID          string       `json:"messageId,omitempty"`
+	MessageID         string       `json:"messageId,omitempty"`
 	ErrNo             int          `json:"errNo,omitempty"`
 	Syslog            RecordSyslog `json:"syslog,omitempty"`
 }
@@ -104,7 +104,7 @@ func recordFromJournalEntryFields(e *sdjournal.JournalEntry) *Record {
 	r.Transport = f["_TRANSPORT"]
 	r.Priority = priorityMap[f["PRIORITY"]]
 	r.Message = f["MESSAGE"]
-	r.MesageID = f["MESSAGE_ID"]
+	r.MessageID = f["MESSAGE_ID"]
 
 	if facility, err := strconv.Atoi(f["SYSLOG_FACILITY"]); err == nil {
 		r.Syslog.Facility = facility

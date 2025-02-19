@@ -34,7 +34,7 @@ type Batch struct {
 	Cursor string
 }
 
-// Batcher tranforms journal entries into log events and batches log events into, you guessed it, batches.
+// Batcher transforms journal entries into log events and batches log events into, you guessed it, batches.
 type Batcher struct {
 	entries   <-chan *sdjournal.JournalEntry
 	converter EntryToEventConverter
@@ -75,7 +75,7 @@ func (b *Batcher) Batches() <-chan *Batch {
 	return b.batches
 }
 
-// Batch batches entries untile the ctx is canceled. Batch should be called only once per batcher.
+// Batch batches entries until the ctx is canceled. Batch should be called only once per batcher.
 func (b *Batcher) Batch(ctx context.Context) {
 	bytesCount := 0
 	ticker := time.NewTicker(b.MaxWait)

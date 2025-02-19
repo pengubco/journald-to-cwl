@@ -1,5 +1,5 @@
 Name: journald-to-cwl
-Version: 0.1.0
+Version: 0.1.1
 Release: 1%{?dist}
 Summary: Push journal logs to CloudWatch Logs
 License: MIT

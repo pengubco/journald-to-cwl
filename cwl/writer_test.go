@@ -4,12 +4,13 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"sync"
 	"testing"
+	"time"
 
 	"github.com/aws/aws-sdk-go-v2/aws"
 	"github.com/aws/aws-sdk-go-v2/service/cloudwatchlogs"
 	"github.com/aws/aws-sdk-go-v2/service/cloudwatchlogs/types"
+	"github.com/aws/smithy-go"
 	"github.com/stretchr/testify/assert"
 
 	"github.com/pengubco/journald-to-cwl/batch"
@@ -56,7 +57,7 @@ func TestWriteBatches(t *testing.T) {
 
 			var cursors []string
 			s := &cwlStub{}
-			w := NewWriter(batches, s, "journal-logs", "i-11111111111111111",
+			w := NewWriter(batches, s, "instance-logs", "i-11111111111111111/journal-logs",
 				func(cursor string) error {
 					cursors = append(cursors, cursor)
 					return nil
@@ -70,7 +71,7 @@ func TestWriteBatches(t *testing.T) {
 	}
 }
 
-func TestPanicOnError(t *testing.T) {
+func TestReturnOnNonRetriableError(t *testing.T) {
 	cases := []struct {
 		name                 string
 		errOnPutLogEvents    error
@@ -78,7 +79,7 @@ func TestPanicOnError(t *testing.T) {
 		saveCursor           SaveCursor
 	}{
 		{
-			name:                 "put log events faield",
+			name:                 "put log events faield, non retriable",
 			errOnPutLogEvents:    errors.New("cannot put log events"),
 			errOnCreateLogStream: nil,
 			saveCursor:           func(string) error { return nil },
@@ -93,7 +94,7 @@ func TestPanicOnError(t *testing.T) {
 		},
 		{
 			name:       "save cursor error",
-			saveCursor: func(string) error { return errors.New("cannot save cursor") },
+			saveCursor: func(cursor string) error { return errors.New("cannot save cursor") },
 		},
 	}
 	for _, tc := range cases {
@@ -106,18 +107,45 @@ func TestPanicOnError(t *testing.T) {
 			w := NewWriter(batches, &cwlStub{
 				errOnPutLogEvents:    tc.errOnPutLogEvents,
 				errOnCreateLogStream: tc.errOnCreateLogStream,
-			}, "journal-logs", "i-11111111111111111", tc.saveCursor)
+			}, "instance-logs", "i-11111111111111111/journal-logs", tc.saveCursor)
 			ctx, cancel := context.WithCancel(context.Background())
 			defer cancel()
 
-			var wg sync.WaitGroup
-			wg.Add(1)
+			w.Write(ctx)
+			// The Write returns but the context was not cancelled. This means, the Write returns on non-retriable errors.
+			assert.NoError(t, ctx.Err())
+		})
+	}
+}
 
-			go assert.Panics(t, func() {
-				defer wg.Done()
-				w.Write(ctx)
-			})
-			wg.Wait()
+func TestRetryOnThrottle(t *testing.T) {
+	cases := []struct {
+		name              string
+		errOnPutLogEvents error
+	}{
+		{
+			name: "put log events throttled",
+			errOnPutLogEvents: &smithy.GenericAPIError{
+				Code: ((*types.ThrottlingException)(nil)).ErrorCode(),
+			},
+		},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			batches := make(chan *batch.Batch, 1)
+			batches <- &batch.Batch{
+				Events: []types.InputLogEvent{{}},
+				Cursor: "cursor-0",
+			}
+			w := NewWriter(batches, &cwlStub{
+				errOnPutLogEvents: tc.errOnPutLogEvents,
+			}, "instance-logs", "i-11111111111111111/journal-logs", func(string) error { return nil })
+			ctx, cancel := context.WithTimeout(context.Background(), 20*time.Second)
+			defer cancel()
+
+			w.Write(ctx)
+			// The Write returns and the context has been cancelled. This indicates that the Write retried on throttles.
+			assert.Error(t, ctx.Err())
 		})
 	}
 }
@@ -129,8 +157,8 @@ type cwlStub struct {
 	errOnCreateLogStream error
 }
 
-func (s *cwlStub) PutLogEvents(_ context.Context, params *cloudwatchlogs.PutLogEventsInput,
-	_ ...func(*cloudwatchlogs.Options)) (*cloudwatchlogs.PutLogEventsOutput, error) {
+func (s *cwlStub) PutLogEvents(ctx context.Context, params *cloudwatchlogs.PutLogEventsInput,
+	optFns ...func(*cloudwatchlogs.Options)) (*cloudwatchlogs.PutLogEventsOutput, error) {
 	if s.errOnPutLogEvents != nil {
 		return nil, s.errOnPutLogEvents
 	}
@@ -138,7 +166,7 @@ func (s *cwlStub) PutLogEvents(_ context.Context, params *cloudwatchlogs.PutLogE
 	return nil, nil //nolint:nilnil
 }
 
-func (s *cwlStub) CreateLogStream(context.Context, *cloudwatchlogs.CreateLogStreamInput,
-	...func(*cloudwatchlogs.Options)) (*cloudwatchlogs.CreateLogStreamOutput, error) {
+func (s *cwlStub) CreateLogStream(ctx context.Context, params *cloudwatchlogs.CreateLogStreamInput,
+	optFns ...func(*cloudwatchlogs.Options)) (*cloudwatchlogs.CreateLogStreamOutput, error) {
 	return nil, s.errOnCreateLogStream
 }
