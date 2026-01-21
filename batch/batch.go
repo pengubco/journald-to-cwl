@@ -25,6 +25,11 @@ const (
 	maxBatchWait = 2 * time.Second
 )
 
+// isAuditLog checks if a journal entry is an audit log.
+func isAuditLog(e *sdjournal.JournalEntry) bool {
+	return e.Fields[sdjournal.SD_JOURNAL_FIELD_TRANSPORT] == "audit"
+}
+
 // Batch is a unit collection of CWL log events and the journal entry cursor of the last log event.
 type Batch struct {
 	Events []types.InputLogEvent
@@ -49,6 +54,9 @@ type Batcher struct {
 
 	// Maximum time to wait for a batch.
 	MaxWait time.Duration
+
+	// skipAuditLog determines whether to skip audit logs.
+	skipAuditLog bool
 }
 
 func NewBatcher(
@@ -57,12 +65,13 @@ func NewBatcher(
 	opts ...Option,
 ) *Batcher {
 	b := Batcher{
-		entries:    entries,
-		converter:  converter,
-		batches:    make(chan *Batch),
-		maxPayload: maxCWLBatchSize,
-		maxEvents:  maxBatchEvents,
-		MaxWait:    maxBatchWait,
+		entries:      entries,
+		converter:    converter,
+		batches:      make(chan *Batch),
+		maxPayload:   maxCWLBatchSize,
+		maxEvents:    maxBatchEvents,
+		MaxWait:      maxBatchWait,
+		skipAuditLog: false,
 	}
 	for _, opt := range opts {
 		opt(&b)
@@ -108,6 +117,10 @@ func (b *Batcher) Batch(ctx context.Context) {
 			saveOldBatch()
 			startNewBatch()
 		case entry := <-b.entries:
+			// Skip audit logs if configured to do so.
+			if b.skipAuditLog && isAuditLog(entry) {
+				continue
+			}
 			event := b.converter(entry)
 			if event.Message == nil {
 				// this should never happen.
@@ -148,5 +161,11 @@ func WithMaxEvents(maxEvents int) Option {
 func WithMaxWait(maxWait time.Duration) Option {
 	return func(b *Batcher) {
 		b.MaxWait = maxWait
+	}
+}
+
+func WithSkipAuditLog(skip bool) Option {
+	return func(b *Batcher) {
+		b.skipAuditLog = skip
 	}
 }

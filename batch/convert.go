@@ -83,35 +83,35 @@ func recordFromJournalEntryFields(e *sdjournal.JournalEntry) *Record {
 	var r Record
 	r.RealtimeTimestamp = e.RealtimeTimestamp
 	f := e.Fields
-	if pid, err := strconv.Atoi(f["_PID"]); err == nil {
+	if pid, err := strconv.Atoi(f[sdjournal.SD_JOURNAL_FIELD_PID]); err == nil {
 		r.PID = pid
 	}
-	if uid, err := strconv.Atoi(f["_UID"]); err == nil {
+	if uid, err := strconv.Atoi(f[sdjournal.SD_JOURNAL_FIELD_UID]); err == nil {
 		r.UID = uid
 	}
-	if gid, err := strconv.Atoi(f["_GID"]); err == nil {
+	if gid, err := strconv.Atoi(f[sdjournal.SD_JOURNAL_FIELD_GID]); err == nil {
 		r.GID = gid
 	}
 	if errNo, err := strconv.Atoi(f["ERRNO"]); err == nil {
 		r.ErrNo = errNo
 	}
-	r.Command = f["_COMM"]
-	r.Executable = f["_EXE"]
-	r.SystemdUnit = f["_SYSTEMD_UNIT"]
-	r.BootID = f["_BOOT_ID"]
-	r.MachineID = f["_MACHINE_ID"]
-	r.Hostname = f["_HOSTNAME"]
-	r.Transport = f["_TRANSPORT"]
-	r.Priority = priorityMap[f["PRIORITY"]]
-	r.Message = f["MESSAGE"]
-	r.MessageID = f["MESSAGE_ID"]
+	r.Command = f[sdjournal.SD_JOURNAL_FIELD_COMM]
+	r.Executable = f[sdjournal.SD_JOURNAL_FIELD_EXE]
+	r.SystemdUnit = f[sdjournal.SD_JOURNAL_FIELD_SYSTEMD_UNIT]
+	r.BootID = f[sdjournal.SD_JOURNAL_FIELD_BOOT_ID]
+	r.MachineID = f[sdjournal.SD_JOURNAL_FIELD_MACHINE_ID]
+	r.Hostname = f[sdjournal.SD_JOURNAL_FIELD_HOSTNAME]
+	r.Transport = f[sdjournal.SD_JOURNAL_FIELD_TRANSPORT]
+	r.Priority = priorityMap[f[sdjournal.SD_JOURNAL_FIELD_PRIORITY]]
+	r.Message = f[sdjournal.SD_JOURNAL_FIELD_MESSAGE]
+	r.MessageID = f[sdjournal.SD_JOURNAL_FIELD_MESSAGE_ID]
 
-	if facility, err := strconv.Atoi(f["SYSLOG_FACILITY"]); err == nil {
+	if facility, err := strconv.Atoi(f[sdjournal.SD_JOURNAL_FIELD_SYSLOG_FACILITY]); err == nil {
 		r.Syslog.Facility = facility
 	}
-	if pid, err := strconv.Atoi(f["SYSLOG_PID"]); err == nil {
+	if pid, err := strconv.Atoi(f[sdjournal.SD_JOURNAL_FIELD_SYSLOG_PID]); err == nil {
 		r.Syslog.PID = pid
 	}
-	r.Syslog.Identifier = f["SYSLOG_IDENTIFIER"]
+	r.Syslog.Identifier = f[sdjournal.SD_JOURNAL_FIELD_SYSLOG_IDENTIFIER]
 	return &r
 }

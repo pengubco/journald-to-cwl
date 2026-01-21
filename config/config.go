@@ -17,6 +17,8 @@ type Config struct {
 	LogStream string `mapstructure:"log_stream"`
 
 	StateFile string `mapstructure:"state_file"`
+
+	SkipAuditLog bool `mapstructure:"skip_audit_log"`
 }
 
 func InitalizeConfig(instanceID string, args []string) (*Config, error) {
@@ -24,6 +26,7 @@ func InitalizeConfig(instanceID string, args []string) (*Config, error) {
 	v := viper.New()
 	v.SetDefault("log_group", DefaultLogGroup)
 	v.SetDefault("state_file", DefaultStateFile)
+	v.SetDefault("skip_audit_log", false)
 	if len(args) >= 1 {
 		configFile := args[0]
 		v.SetConfigType("env")
