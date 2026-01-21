@@ -86,7 +86,7 @@ func execute() int {
 	}()
 
 	// Batch journald entries to Cloudwatch log events.
-	batcher := batch.NewBatcher(reader.Entries(), batch.NewEntryToEventConverter(instanceID, time.Now))
+	batcher := batch.NewBatcher(reader.Entries(), batch.NewEntryToEventConverter(instanceID, time.Now), batch.WithSkipAuditLog(c.SkipAuditLog))
 	go func() {
 		defer cancel()
 		batcher.Batch(ctx)
