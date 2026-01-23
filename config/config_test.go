@@ -17,7 +17,7 @@ func TestInitializeConfig_FileNotExist(t *testing.T) {
 
 func TestInitializeConfig_FilePermissionError(t *testing.T) {
 	t.Skip("skip for now because the codebuild environment seems ignoring the file mode.")
-	f, err := os.CreateTemp("", "*.conf")
+	f, err := os.CreateTemp("", "*.toml")
 	assert.NoError(t, err)
 	defer os.Remove(f.Name())
 	err = os.Chmod(f.Name(), 0000)
@@ -67,7 +67,7 @@ func TestInitializeConfig_FileOK(t *testing.T) {
 
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
-			f, err := os.CreateTemp("", "*.conf")
+			f, err := os.CreateTemp("", "*.toml")
 			assert.NoError(t, err)
 			defer os.Remove(f.Name())
 			_, err = fmt.Fprintf(f, "%s\n", tc.fileContent)

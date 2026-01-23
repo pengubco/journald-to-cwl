@@ -57,6 +57,9 @@ type Batcher struct {
 
 	// skipAuditLog determines whether to skip audit logs.
 	skipAuditLog bool
+
+	// messageFilter is a function that returns true if a message should be filtered.
+	messageFilter func(string) bool
 }
 
 func NewBatcher(
@@ -121,6 +124,13 @@ func (b *Batcher) Batch(ctx context.Context) {
 			if b.skipAuditLog && isAuditLog(entry) {
 				continue
 			}
+			// Apply message filtering if configured.
+			if b.messageFilter != nil {
+				message := entry.Fields[sdjournal.SD_JOURNAL_FIELD_MESSAGE]
+				if b.messageFilter(message) {
+					continue
+				}
+			}
 			event := b.converter(entry)
 			if event.Message == nil {
 				// this should never happen.
@@ -167,5 +177,11 @@ func WithMaxWait(maxWait time.Duration) Option {
 func WithSkipAuditLog(skip bool) Option {
 	return func(b *Batcher) {
 		b.skipAuditLog = skip
+	}
+}
+
+func WithMessageFilter(filter func(string) bool) Option {
+	return func(b *Batcher) {
+		b.messageFilter = filter
 	}
 }

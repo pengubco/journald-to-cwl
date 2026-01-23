@@ -9,25 +9,29 @@ Simplicity in design leads to robustness.
 
 1. For simplicity, the CWL log group and EC2 instance must be in the same AWS region and belong to the same AWS account.
 
-1. For simplicity, it does not provide filtering configurations for log entries by priority, entry keys, or regular expressions. 
-It pushes all journald logs to CWL. If you need to filter logs (e.g., to exclude sensitive information), 
-configure [systemd logging](https://www.freedesktop.org/software/systemd/man/latest/systemd.exec.html#Logging%20and%20Standard%20Input/Output) directly.
-
 1. For simplicity, it uses permissions from the EC2 instance profile.
 
-1. For simplicity, it does not accept command-line flags. Instead, it reads an env-style configuration file:
-```
-log_group = ""      # CWL log group name
-log_stream = ""     # CWL log stream name
-state_file = ""     # Text file that persists the state
-skip_audit_log = "" # Skip audit logs (default: false)
+1. For simplicity, it does not accept command-line flags. Instead, it reads a TOML configuration file:
+```toml
+log_group = "journal-logs"           # CWL log group name
+log_stream = ""                      # CWL log stream name (defaults to instance-id)
+state_file = "/var/lib/journald-to-cwl/state"  # Text file that persists the state
+skip_audit_log = false               # Skip audit logs
+
+# Optional: Filter log messages using regex patterns (RE2 syntax)
+ignore_patterns = [
+    "^DEBUG:",                       # Filter debug messages
+    "temporary error",               # Filter temporary errors
+    "connection reset"               # Filter connection resets
+]
 ```
 The default configuration is:
-```
+```toml
 log_group = "journal-logs"
 state_file = "/var/lib/journald-to-cwl/state"
 log_stream = "<instance-id>"  # e.g., "i-11111111111111111"
 skip_audit_log = false
+ignore_patterns = []          # No filtering by default
 ```
 
 ## Installation
@@ -50,8 +54,12 @@ Install:
 # Use the RPM you downloaded or built
 sudo rpm -ivh journald-to-cwl-0.1.0-1.amzn2.x86_64.rpm
 
-# Modify the config file if needed
+# Modify the TOML config file if needed
 cat /etc/journald-to-cwl/journald-to-cwl.conf
+
+# Example: Add regex patterns to filter specific log messages
+# Edit the config file and add ignore_patterns array:
+# ignore_patterns = ["^DEBUG:", "temporary error"]
 
 sudo systemctl start journald-to-cwl
 ```
