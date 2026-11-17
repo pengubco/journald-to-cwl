@@ -155,8 +155,9 @@ func TestBatchSkipAuditLog(t *testing.T) {
 			entry := getAuditLogEntry(dummyInstanceID, timeUnixMilli, fmt.Sprintf("cursor-%d", i))
 			entriesChan <- entry
 		}
-		// Send 8 more regular logs to reach maxEvents (10 non-audit logs total)
-		for i := 5; i < 13; i++ {
+		// Send 8 more regular logs to reach maxEvents (10 non-audit logs total), plus one more: a full batch
+		// is flushed when the next entry arrives, not when the last slot is filled.
+		for i := 5; i < 14; i++ {
 			entry, _ := getExampleEntryAndEvent(dummyInstanceID, timeUnixMilli, fmt.Sprintf("cursor-%d", i))
 			entriesChan <- entry
 		}
@@ -164,7 +165,7 @@ func TestBatchSkipAuditLog(t *testing.T) {
 
 	// Verify we get a batch with only non-audit logs.
 	batch := <-batcher.Batches()
-	// Should have 10 events (skipped 3 audit logs out of 13 total)
+	// Should have 10 events (skipped 3 audit logs out of the first 13)
 	assert.Equal(t, 10, len(batch.Events))
 	// Cursor should be from the last non-audit log processed (cursor-12, which is the 10th non-audit log)
 	assert.Equal(t, "cursor-12", batch.Cursor)
@@ -198,8 +199,9 @@ func TestBatchDoNotSkipAuditLog(t *testing.T) {
 			entry := getAuditLogEntry(dummyInstanceID, timeUnixMilli, fmt.Sprintf("cursor-%d", i))
 			entriesChan <- entry
 		}
-		// Send 5 more regular logs to reach maxEvents
-		for i := 5; i < 10; i++ {
+		// Send 5 more regular logs to reach maxEvents, plus one more: a full batch is flushed when the next
+		// entry arrives, not when the last slot is filled.
+		for i := 5; i < 11; i++ {
 			entry, _ := getExampleEntryAndEvent(dummyInstanceID, timeUnixMilli, fmt.Sprintf("cursor-%d", i))
 			entriesChan <- entry
 		}
@@ -207,7 +209,7 @@ func TestBatchDoNotSkipAuditLog(t *testing.T) {
 
 	// Verify we get a batch with all logs including audit logs.
 	batch := <-batcher.Batches()
-	// Should have 10 events (all logs included)
+	// Should have 10 events (all of the first 10 logs included)
 	assert.Equal(t, 10, len(batch.Events))
 	assert.Equal(t, "cursor-9", batch.Cursor)
 }
