@@ -2,6 +2,8 @@ module github.com/pengubco/journald-to-cwl
 
 go 1.25
 
+toolchain go1.27.4
+
 require (
 	github.com/aws/aws-sdk-go-v2 v1.32.2
 	github.com/aws/aws-sdk-go-v2/config v1.27.43
