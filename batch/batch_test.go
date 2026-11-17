@@ -8,7 +8,6 @@ import (
 
 	"github.com/aws/aws-sdk-go-v2/aws"
 	"github.com/aws/aws-sdk-go-v2/service/cloudwatchlogs/types"
-	"github.com/aws/aws-sdk-go/service/cloudwatchlogs"
 	"github.com/coreos/go-systemd/v22/sdjournal"
 	"github.com/stretchr/testify/assert"
 )
@@ -308,7 +307,7 @@ func getAuditLogEntry(instanceID string, timestamp time.Time, cursor string) *sd
 	return entry
 }
 
-func getExampleEntryAndEvent(instanceID string, timestamp time.Time, cursor string) (*sdjournal.JournalEntry, cloudwatchlogs.InputLogEvent) {
+func getExampleEntryAndEvent(instanceID string, timestamp time.Time, cursor string) (*sdjournal.JournalEntry, types.InputLogEvent) {
 	entry := sdjournal.JournalEntry{
 		Fields: map[string]string{
 			sdjournal.SD_JOURNAL_FIELD_PID:               "1",
@@ -356,7 +355,7 @@ func getExampleEntryAndEvent(instanceID string, timestamp time.Time, cursor stri
 }
 `, instanceID)
 
-	event := cloudwatchlogs.InputLogEvent{
+	event := types.InputLogEvent{
 		Message:   aws.String(message),
 		Timestamp: aws.Int64(timestamp.UnixMilli()),
 	}

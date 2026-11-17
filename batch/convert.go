@@ -6,8 +6,8 @@ import (
 	"strconv"
 	"time"
 
+	"github.com/aws/aws-sdk-go-v2/aws"
 	"github.com/aws/aws-sdk-go-v2/service/cloudwatchlogs/types"
-	"github.com/aws/aws-sdk-go/aws"
 	"github.com/coreos/go-systemd/v22/sdjournal"
 )
 
@@ -69,7 +69,7 @@ type Record struct {
 	Message           string       `json:"message,omitempty"`
 	MessageID         string       `json:"messageId,omitempty"`
 	ErrNo             int          `json:"errNo,omitempty"`
-	Syslog            RecordSyslog `json:"syslog,omitempty"`
+	Syslog            RecordSyslog `json:"syslog"`
 }
 
 type RecordSyslog struct {
