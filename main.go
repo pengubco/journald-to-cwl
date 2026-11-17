@@ -2,6 +2,7 @@ package main
 
 import (
 	"context"
+	"errors"
 	"flag"
 	"fmt"
 	"log"
@@ -10,9 +11,11 @@ import (
 	"syscall"
 	"time"
 
+	"github.com/aws/aws-sdk-go-v2/aws"
 	awsconfig "github.com/aws/aws-sdk-go-v2/config"
 	"github.com/aws/aws-sdk-go-v2/feature/ec2/imds"
 	"github.com/aws/aws-sdk-go-v2/service/cloudwatchlogs"
+	"github.com/cenkalti/backoff/v7"
 	"github.com/coreos/go-systemd/v22/sdjournal"
 	"go.uber.org/zap"
 
@@ -27,6 +30,23 @@ var (
 	instanceID string
 	cwlClient  *cloudwatchlogs.Client
 )
+
+// IMDS is unavailable for a short while after boot and during instance maintenance; with this backoff all
+// attempts together take at most ~90 s before the process exits and systemd starts it again.
+var (
+	imdsRetryMinBackoff = 100 * time.Millisecond
+	imdsRetryMaxBackoff = 10 * time.Second
+	imdsRetryJitter     = 0.2 // Each wait is randomized within ±20%.
+	imdsRetryMultiple   = 2.0
+	imdsMaxRetries      = 10
+	imdsAttemptTimeout  = 5 * time.Second
+)
+
+// IMDSClient is the part of the IMDS client this program uses.
+type IMDSClient interface {
+	GetInstanceIdentityDocument(ctx context.Context, params *imds.GetInstanceIdentityDocumentInput,
+		optFns ...func(*imds.Options)) (*imds.GetInstanceIdentityDocumentOutput, error)
+}
 
 func main() {
 	// The reason main() calls execute() is that Go does not support both:
@@ -49,7 +69,12 @@ func execute() int {
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
 
-	if err := initializeAWS(); err != nil {
+	cfg, err := loadAWSConfig(ctx)
+	if err != nil {
+		zap.S().Error(err)
+		return 1
+	}
+	if err := initializeAWS(ctx, cfg, imds.NewFromConfig(cfg)); err != nil {
 		zap.S().Error(err)
 		return 1
 	}
@@ -121,22 +146,38 @@ func execute() int {
 	return 0
 }
 
-func initializeAWS() error {
-	timeout := 20 * time.Second
-	ctx, cancel := context.WithTimeout(context.Background(), timeout)
+func loadAWSConfig(ctx context.Context) (aws.Config, error) {
+	ctx, cancel := context.WithTimeout(ctx, 20*time.Second)
 	defer cancel()
-
 	cfg, err := awsconfig.LoadDefaultConfig(ctx)
 	if err != nil {
-		return fmt.Errorf("cannot load default aws config, %w", err)
+		return aws.Config{}, fmt.Errorf("cannot load default aws config, %w", err)
 	}
-	client := imds.NewFromConfig(cfg)
-	document, err := client.GetInstanceIdentityDocument(ctx, nil)
+	return cfg, nil
+}
+
+func initializeAWS(ctx context.Context, cfg aws.Config, client IMDSClient) error {
+	b := &backoff.ExponentialBackOff{
+		InitialInterval:     imdsRetryMinBackoff,
+		MaxInterval:         imdsRetryMaxBackoff,
+		RandomizationFactor: imdsRetryJitter,
+		Multiplier:          imdsRetryMultiple,
+	}
+	document, err := backoff.Retry(ctx, func() (*imds.GetInstanceIdentityDocumentOutput, error) {
+		// The timeout is created inside the attempt on purpose. Created once outside the loop, it would expire
+		// part-way through the backoff waits, and each later attempt would start already timed out.
+		ctx, cancel := context.WithTimeout(ctx, imdsAttemptTimeout)
+		defer cancel()
+		return client.GetInstanceIdentityDocument(ctx, nil)
+	}, backoff.WithBackOff(b), backoff.WithMaxTries(uint(imdsMaxRetries)), backoff.WithMaxElapsedTime(0))
 	if err != nil {
-		return err
+		return fmt.Errorf("failed to get instance identity document, %w", err)
+	}
+	if document == nil {
+		return errors.New("IMDS returned no instance identity document")
 	}
 	region = document.Region
-	instanceID = document.InstanceIdentityDocument.InstanceID
+	instanceID = document.InstanceID
 	// Use the default: retry attempts of 3 and max backoff of 20 seconds.
 	// https://aws.github.io/aws-sdk-go-v2/docs/configuring-sdk/retries-timeouts/
 	cwlClient = cloudwatchlogs.NewFromConfig(cfg, func(o *cloudwatchlogs.Options) {
