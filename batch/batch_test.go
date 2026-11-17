@@ -7,6 +7,7 @@ import (
 	"time"
 
 	"github.com/aws/aws-sdk-go-v2/aws"
+	"github.com/aws/aws-sdk-go-v2/service/cloudwatchlogs/types"
 	"github.com/aws/aws-sdk-go/service/cloudwatchlogs"
 	"github.com/coreos/go-systemd/v22/sdjournal"
 	"github.com/stretchr/testify/assert"
@@ -54,6 +55,76 @@ func TestBatchOnMaxEvents(t *testing.T) {
 	assert.Equal(t, "cursor-1", batch.Cursor)
 	batch = <-batcher.Batches()
 	assert.Equal(t, "cursor-3", batch.Cursor)
+}
+
+func TestPrecedesLast(t *testing.T) {
+	at := func(ms int64) types.InputLogEvent { return types.InputLogEvent{Timestamp: aws.Int64(ms)} }
+	cases := []struct {
+		name     string
+		batch    []types.InputLogEvent
+		next     types.InputLogEvent
+		expected bool
+	}{
+		{name: "empty batch", batch: nil, next: at(5), expected: false},
+		{name: "later timestamp", batch: []types.InputLogEvent{at(5)}, next: at(6), expected: false},
+		{name: "same timestamp", batch: []types.InputLogEvent{at(5)}, next: at(5), expected: false},
+		{name: "earlier timestamp", batch: []types.InputLogEvent{at(5)}, next: at(4), expected: true},
+		{name: "compares with newest only", batch: []types.InputLogEvent{at(9), at(5)}, next: at(7), expected: false},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			assert.Equal(t, tc.expected, precedesLast(&Batch{Events: tc.batch}, tc.next))
+		})
+	}
+}
+
+// TestBatchStartsNewBatchWhenClockGoesBack feeds four entries whose read-time clock jumps back by one
+// minute after the second, and expects two batches of two, each in order and with unchanged timestamps.
+func TestBatchStartsNewBatchWhenClockGoesBack(t *testing.T) {
+	base := time.UnixMilli(int64(1722650790111))
+	readTimes := []time.Time{base, base.Add(time.Millisecond), base.Add(-time.Minute), base.Add(-time.Minute + time.Millisecond)}
+	next := 0
+	converter := NewEntryToEventConverter(dummyInstanceID, func() time.Time {
+		next++
+		return readTimes[next-1]
+	})
+
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+	entriesChan := make(chan *sdjournal.JournalEntry)
+	// Neither the size limit nor the timer can cut a batch here.
+	batcher := NewBatcher(entriesChan, converter, WithMaxEvents(100), WithMaxWait(time.Hour))
+	go batcher.Batch(ctx)
+	go func() {
+		for i, readTime := range readTimes {
+			entry, _ := getExampleEntryAndEvent(dummyInstanceID, readTime, fmt.Sprintf("cursor-%d", i))
+			entriesChan <- entry
+		}
+		// The last batch is only flushed on shutdown, and every entry has been consumed by now.
+		cancel()
+	}()
+
+	var got [][]int64
+	var cursors []string
+	for range 2 {
+		var b *Batch
+		select {
+		case b = <-batcher.Batches():
+		case <-time.After(5 * time.Second):
+			t.Fatalf("got %d batches, want 2: %v", len(got), got)
+		}
+		var stamps []int64
+		for _, e := range b.Events {
+			stamps = append(stamps, aws.ToInt64(e.Timestamp))
+		}
+		got = append(got, stamps)
+		cursors = append(cursors, b.Cursor)
+	}
+	assert.Equal(t, [][]int64{
+		{readTimes[0].UnixMilli(), readTimes[1].UnixMilli()},
+		{readTimes[2].UnixMilli(), readTimes[3].UnixMilli()},
+	}, got)
+	assert.Equal(t, []string{"cursor-1", "cursor-3"}, cursors)
 }
 
 func TestBatchOnMaxWait(t *testing.T) {

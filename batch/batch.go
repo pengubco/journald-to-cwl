@@ -143,7 +143,7 @@ func (b *Batcher) Batch(ctx context.Context) {
 				event.Message = aws.String((*event.Message)[:bytesToKeepForLogEvent])
 				msgSize = len(*event.Message)
 			}
-			if msgSize+bytesCount > b.maxPayload || len(batch.Events) == b.maxEvents {
+			if msgSize+bytesCount > b.maxPayload || len(batch.Events) == b.maxEvents || precedesLast(batch, event) {
 				saveOldBatch()
 				startNewBatch()
 			}
@@ -155,6 +155,17 @@ func (b *Batcher) Batch(ctx context.Context) {
 }
 
 type Option func(*Batcher)
+
+// precedesLast reports whether e carries an earlier timestamp than the newest event in b. PutLogEvents
+// accepts a request only if its events are sorted by timestamp. Events here are stamped at read time
+// from the wall clock, which an NTP correction can move backwards, so such an event must go into a new
+// batch rather than be appended.
+func precedesLast(b *Batch, e types.InputLogEvent) bool {
+	if len(b.Events) == 0 {
+		return false
+	}
+	return aws.ToInt64(e.Timestamp) < aws.ToInt64(b.Events[len(b.Events)-1].Timestamp)
+}
 
 func WithMaxPayload(maxPayload int) Option {
 	return func(b *Batcher) {
