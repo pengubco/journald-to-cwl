@@ -31,7 +31,7 @@ func TestReadEntries(t *testing.T) {
 					Cursor: fmt.Sprintf("cursor-%d", i),
 				})
 			}
-			rand.Shuffle(tc.numEntries, func(i, j int) {
+			rand.Shuffle(tc.numEntries, func(i, j int) { //nolint:gosec // Test input order only.
 				entries[i], entries[j] = entries[j], entries[i]
 			})
 

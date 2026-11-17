@@ -10,12 +10,9 @@ import (
 func TestCursor(t *testing.T) {
 	var _ Cursor = (*FilebasedCursor)(nil)
 
-	f, err := os.CreateTemp("", "cursor-*")
+	f, err := os.CreateTemp(t.TempDir(), "cursor-*")
 	assert.NoError(t, err)
-	defer func() {
-		f.Close()
-		os.Remove(f.Name())
-	}()
+	defer f.Close()
 
 	cursor, err := NewFilebasedCursor(f.Name())
 	assert.NoError(t, err)

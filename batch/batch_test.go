@@ -222,7 +222,7 @@ func TestBatchSkipAuditLog(t *testing.T) {
 		}
 		// Send 3 audit logs (should be skipped)
 		for i := 2; i < 5; i++ {
-			entry := getAuditLogEntry(dummyInstanceID, timeUnixMilli, fmt.Sprintf("cursor-%d", i))
+			entry := getAuditLogEntry(timeUnixMilli, fmt.Sprintf("cursor-%d", i))
 			entriesChan <- entry
 		}
 		// Send 8 more regular logs to reach maxEvents (10 non-audit logs total), plus one more: a full batch
@@ -266,7 +266,7 @@ func TestBatchDoNotSkipAuditLog(t *testing.T) {
 		}
 		// Send 3 audit logs (should NOT be skipped)
 		for i := 2; i < 5; i++ {
-			entry := getAuditLogEntry(dummyInstanceID, timeUnixMilli, fmt.Sprintf("cursor-%d", i))
+			entry := getAuditLogEntry(timeUnixMilli, fmt.Sprintf("cursor-%d", i))
 			entriesChan <- entry
 		}
 		// Send 5 more regular logs to reach maxEvents, plus one more: a full batch is flushed when the next
@@ -285,7 +285,7 @@ func TestBatchDoNotSkipAuditLog(t *testing.T) {
 }
 
 // getAuditLogEntry creates a journal entry that is an audit log.
-func getAuditLogEntry(instanceID string, timestamp time.Time, cursor string) *sdjournal.JournalEntry {
+func getAuditLogEntry(timestamp time.Time, cursor string) *sdjournal.JournalEntry {
 	entry := &sdjournal.JournalEntry{
 		Fields: map[string]string{
 			sdjournal.SD_JOURNAL_FIELD_PID:          "1",

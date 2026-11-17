@@ -9,3 +9,7 @@ build-rpm: build-go
 
 test:
 	go test -timeout 30s -race -vet=all -v -count=1 github.com/pengubco/journald-to-cwl/...
+
+# Requires golangci-lint v2: go install github.com/golangci/golangci-lint/v2/cmd/golangci-lint@latest
+lint:
+	golangci-lint run ./...

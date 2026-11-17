@@ -1,16 +1,25 @@
+version: "2"
 linters:
+  # govet, ineffassign, staticcheck and unused are in the default set.
   enable:
-    - copyloopvar 
-    - gofmt
-    - goimports
+    - copyloopvar
+    - dupword
     - gosec
-    - ineffassign
     - misspell
     - nolintlint
     - revive
-    - staticcheck
-    - tenv 
     - unconvert
-    - unused
-    - govet
-    - dupword 
+    - usetesting
+  exclusions:
+    generated: lax
+    presets:
+      - comments
+      - common-false-positives
+      - legacy
+      - std-error-handling
+formatters:
+  enable:
+    - gofmt
+    - goimports
+  exclusions:
+    generated: lax
