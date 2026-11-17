@@ -1,5 +1,7 @@
 # Journald-to-cwl
 
+[![ci](https://github.com/pengubco/journald-to-cwl/actions/workflows/ci.yml/badge.svg?branch=main)](https://github.com/pengubco/journald-to-cwl/actions/workflows/ci.yml)
+
 `journald-to-cwl` pushes journald logs from EC2 instances to AWS CloudWatch Logs (CWL). In production, run it as 
 a systemd service. It operates as a simple linear Extract → Transform → Load process.
 
