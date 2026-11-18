@@ -41,8 +41,18 @@ ignore_patterns = [
 
 ## Installation
 
-Build from source. You need Go 1.25 or newer; the go command downloads the exact toolchain pinned in `go.mod`
-automatically. The build uses cgo, so it also needs gcc and the systemd headers.
+Each [release](https://github.com/pengubco/journald-to-cwl/releases) has an RPM and a binary tarball for x86_64 and
+aarch64, built on Amazon Linux 2023, with a `SHA256SUMS` file. The binary needs glibc 2.34 or newer. The RPM also
+installs the systemd unit and a default configuration file; with the tarball you provide both yourself (see
+`rpmbuild/SOURCES/`).
+
+```sh
+sha256sum --check --ignore-missing SHA256SUMS
+sudo dnf install -y ./journald-to-cwl-1.0.0-1.amzn2023.$(uname -m).rpm
+```
+
+To build from source instead, you need Go 1.25 or newer; the go command downloads the exact toolchain pinned in
+`go.mod` automatically. The build uses cgo, so it also needs gcc and the systemd headers.
 
 ```sh
 # Amazon Linux, Fedora, RHEL
@@ -139,7 +149,12 @@ tests.
 make test       # unit tests with the race detector
 make lint       # needs golangci-lint v2.15.0, the version CI uses
 make update-go  # pin the latest stable Go toolchain in go.mod, then lint and test
+make dist       # release tarball and RPM for this machine's architecture, in dist/
 ```
+
+To release, set `Version:` in `rpmbuild/SPECS/journald-to-cwl.spec`, then push an annotated tag with the same version
+(`git tag -a v1.2.3`). The release workflow builds both architectures and publishes the tag's message as the
+release notes.
 
 The code follows the three pipeline stages, connected by two channels and stopped by one shared context:
 `journal/reader.go` reads entries, `batch/batch.go` converts and batches them, and `cwl/writer.go` sends the batches.

@@ -1,5 +1,5 @@
 Name: journald-to-cwl
-Version: 0.1.1
+Version: 1.0.0
 Release: 1%{?dist}
 Summary: Push journal logs to CloudWatch Logs
 License: MIT
@@ -35,3 +35,8 @@ touch %{buildroot}%{_sharedstatedir}/journald-to-cwl/state
 %{_sharedstatedir}/journald-to-cwl/state
 
 %changelog
+* Wed Nov 18 2026 Peng Zhang <pengubco@users.noreply.github.com> - 1.0.0-1
+- Retry network errors and CloudWatch Logs server errors for up to 15 minutes per batch.
+- Retry IMDS at startup.
+- Start a new batch when the clock goes backwards.
+- Add skip_audit_log and ignore_patterns.

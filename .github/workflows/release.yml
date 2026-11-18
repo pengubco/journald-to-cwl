@@ -1,0 +1,60 @@
+name: release
+
+# Pushing a tag vX.Y.Z builds the binary tarball and RPM for x86_64 and arm64 on Amazon Linux 2023, and publishes
+# them as a GitHub release whose notes are the tag's annotation.
+on:
+  push:
+    tags: ["v*"]
+
+permissions:
+  contents: read
+
+jobs:
+  build:
+    strategy:
+      matrix:
+        runner: [ubuntu-24.04, ubuntu-24.04-arm]
+    runs-on: ${{ matrix.runner }}
+    container: amazonlinux:2023
+    steps:
+      - run: dnf install -y gcc make systemd-devel systemd-rpm-macros rpm-build tar gzip git
+      - uses: actions/checkout@v7
+      - uses: actions/setup-go@v7
+        with:
+          go-version-file: go.mod
+          cache-dependency-path: go.sum
+      # The workspace belongs to the runner user, not to root in the container; go build reads git for version info.
+      - run: git config --global --add safe.directory "$GITHUB_WORKSPACE"
+      - name: Check the tag matches the RPM version
+        run: |
+          spec="v$(sed -n 's/^Version: *//p' rpmbuild/SPECS/journald-to-cwl.spec)"
+          if [ "$spec" != "$GITHUB_REF_NAME" ]; then
+            echo "tag $GITHUB_REF_NAME does not match spec version $spec" >&2
+            exit 1
+          fi
+      - run: make test
+      - run: make dist
+      - uses: actions/upload-artifact@v7
+        with:
+          name: dist-${{ runner.arch }}
+          path: dist/*
+          if-no-files-found: error
+
+  release:
+    needs: build
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    env:
+      GH_TOKEN: ${{ github.token }}
+    steps:
+      - uses: actions/download-artifact@v8
+        with:
+          path: dist
+          merge-multiple: true
+      - run: cd dist && sha256sum -- * > SHA256SUMS
+      - name: Read the release notes from the annotated tag
+        run: |
+          sha=$(gh api "repos/$GITHUB_REPOSITORY/git/ref/tags/$GITHUB_REF_NAME" -q .object.sha)
+          gh api "repos/$GITHUB_REPOSITORY/git/tags/$sha" -q .message > notes.md
+      - run: gh release create "$GITHUB_REF_NAME" dist/* --repo "$GITHUB_REPOSITORY" --title "$GITHUB_REF_NAME" --notes-file notes.md --verify-tag

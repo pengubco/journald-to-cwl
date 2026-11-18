@@ -1,11 +1,21 @@
-.PHONY: build-go build-rpm test lint update-go
+.PHONY: build-go build-rpm dist test lint update-go
 
+VERSION := $(shell sed -n 's/^Version: *//p' rpmbuild/SPECS/journald-to-cwl.spec)
+ARCH := $(shell uname -m)
+
+# -trimpath keeps the build machine's directory layout out of the binary.
 build-go:
-	go build -o build/journald-to-cwl github.com/pengubco/journald-to-cwl
+	go build -trimpath -o build/journald-to-cwl github.com/pengubco/journald-to-cwl
 
 build-rpm: build-go
 	cp build/journald-to-cwl ./rpmbuild/SOURCES
 	rpmbuild -bb --define "_topdir ${PWD}/rpmbuild" ./rpmbuild/SPECS/journald-to-cwl.spec
+
+# Release files for this machine's architecture: a tarball with the binary, and the RPM.
+dist: build-rpm
+	mkdir -p dist
+	tar -czf dist/journald-to-cwl-$(VERSION)-linux-$(ARCH).tar.gz -C build journald-to-cwl -C $(CURDIR) LICENSE README.md
+	cp rpmbuild/RPMS/$(ARCH)/journald-to-cwl-$(VERSION)-*.$(ARCH).rpm dist/
 
 test:
 	go test -timeout 30s -race -vet=all -v -count=1 github.com/pengubco/journald-to-cwl/...
